@@ -14,7 +14,7 @@ import csv
 from math import sqrt, log, degrees, radians, sin, cos, tan, sinh, cosh, atan, atan2, modf
 import numpy as np
 from geodepy.constants import grs80, utm, Transformation
-from geodepy.convert import dd2dms, dms2dd
+from geodepy.convert import dd2dms, dms2dd, hp2dec, dec2hp
 
 
 # Universal Transverse Mercator Projection Parameters
@@ -530,51 +530,81 @@ def conform14(x, y, z, to_epoch, trans):
     return xtrans, ytrans, ztrans  # , timetrans
 
 
-def grid2geoio():
+def grid2geoio(fn, fn_out, headerout, geotypeout):
     """
-    No Input:
-    Prompts the user for the name of a file in csv format. Data in the file
-    must be in the form Point ID, UTM Zone, Easting (m), Northing (m) with
-    no header line.
+    26/09/2018
+    PickfordJ
+    Modified to accept variables for filepaths in (fn) and out (fn_out).
+    Added a header sniffer to remove headers on incoming csv files
+    Added a output header variable to be able to write a header to the output file
+    Modified the CSV writing to remove blank lines written to the CSV
 
-    No Output:
+    Input:
+    Prompts the user for the name of a file in csv format. Data in the file
+    must be in the form Point ID, UTM Zone, Easting (m), Northing (m). Header lines are automatically filtered out.
+
+    Output:
     Uses the function grid2geo to convert each row in the csv file into a
     latitude and longitude in Degrees, Minutes and Seconds. This data is
-    written to a new file with the name <inputfile>_out.csv
+    written to a new file with the name stored in fn_out
     """
-    # Enter Filename
-    print('Enter co-ordinate file (\.csv)\:')
-    fn = input()
-    # Open Filename
-    csvfile = open(fn)
-    csvreader = csv.reader(csvfile)
+
+    # Open Filename (fn) and use the csv sniffer to detect a header. If header is found it is skipped
+    with open(fn, newline='') as csvfile:
+        sniffer = csv.Sniffer()
+        has_header = sniffer.has_header(csvfile.read(2048))
+        csvfile.seek(0)
+        csvreader = csv.reader(csvfile)
+        if has_header == True:
+            next(csvreader)
+
     # Create Output File
-    fn_part = (os.path.splitext(fn))
-    fn_out = fn_part[0] + '_out' + fn_part[1]
-    outfile = open(fn_out, 'w')
+    #fn_part = (os.path.splitext(fn))
+    #fn_out = fn_part[0] + '_out' + fn_part[1]
     # Write Output
-    outfilewriter = csv.writer(outfile)
-    # Optional Header Row
-    # outfilewriter.writerow(['Pt', 'Latitude', 'Longitude', 'Point Scale Factor', 'Grid Convergence'])
-    for row in csvreader:
-        pt_num = row[0]
-        zone = float(row[1])
-        east = float(row[2])
-        north = float(row[3])
-        # Calculate Conversion
-        lat, long, psf, grid_conv = grid2geo(zone, east, north)
-        lat = dd2dms(lat)
-        long = dd2dms(long)
-        grid_conv = dd2dms(grid_conv)
-        output = [pt_num, lat, long, psf, grid_conv]
-        outfilewriter.writerow(output)
+    with open(fn_out, 'w', newline='') as outfile:
+        outfilewriter = csv.writer(outfile)
+
+        # Header row will be written if 1 is passed to the headerout input variable
+        if headerout == 1:
+            outfilewriter.writerow(
+                ['pt', 'Latitude', 'Longitude', 'Point Scale Factor', 'Grid Convergence'])
+
+        for row in csvreader:
+            pt_num = row[0]
+            zone = float(row[1])
+            east = float(row[2])
+            north = float(row[3])
+            # Calculate Conversion
+            lat, long, psf, grid_conv = grid2geo(zone, east, north)
+            # Selects output format of Lat and Long
+            if geotypeout.get() == 'DD':
+                lat = lat
+                long = long
+            elif geotypeout.get() == 'DMS':
+                lat = dd2dms(lat)
+                long = dd2dms(long)
+            elif geotypeout.get() == 'HP':
+                lat = dec2hp(lat)
+                long = dec2hp(long)
+
+            grid_conv = dd2dms(grid_conv)
+            output = [pt_num, lat, long, psf, grid_conv]
+            outfilewriter.writerow(output)
     # Close Files
     outfile.close()
     csvfile.close()
 
 
-def geo2gridio():
+def geo2gridio(fn, fn_out, headerout, geotypein):
     """
+    26/09/2018
+    PickfordJ
+    Modified to accept variables for filepaths in (fn) and out (fn_out).
+    Added a header sniffer to remove headers on incoming csv files
+    Added a output header variable to be able to write a header to the output file
+    Modified the CSV writing to remove blank lines written to the CSV
+
     No Input:
     Prompts the user for the name of a file in csv format. Data in the file
     must be in the form Point ID, Latitude, Longitude in Decimal Degrees with
@@ -585,29 +615,41 @@ def geo2gridio():
     coordinate with UTM Zone, Easting (m), Northing (m). This data is written
     to a new file with the name <inputfile>_out.csv
     """
-    # Enter Filename
-    print('Enter co-ordinate file:')
-    fn = input()
-    # Open Filename
-    csvfile = open(fn)
-    csvreader = csv.reader(csvfile)
-    # Create Output File
-    fn_part = (os.path.splitext(fn))
-    fn_out = fn_part[0] + '_out' + fn_part[1]
-    outfile = open(fn_out, 'w')
-    # Write Output
-    outfilewriter = csv.writer(outfile)
-    # Optional Header Row
-    # outfilewriter.writerow(['Pt', 'Zone', 'Easting', 'Northing', 'Point Scale Factor', 'Grid Convergence'])
-    for row in csvreader:
-        pt_num = row[0]
-        lat = dms2dd(float(row[1]))
-        long = dms2dd(float(row[2]))
-        # Calculate Conversion
-        hemisphere, zone, east, north, psf, grid_conv = geo2grid(lat, long)
-        grid_conv = dms2dd(grid_conv)
-        output = [pt_num] + [hemisphere, zone, east, north, psf, grid_conv]
-        outfilewriter.writerow(output)
+    # Open Filename (fn) and use the csv sniffer to detect a header. If header is found it is skipped
+    with open(fn, newline='') as csvfile:
+        sniffer = csv.Sniffer()
+        has_header = sniffer.has_header(csvfile.read(2048))
+        csvfile.seek(0)
+        csvreader = csv.reader(csvfile)
+        if has_header == True:
+            next(csvreader)
+
+        # Write Output
+        with open(fn_out, 'w', newline='') as outfile:
+            outfilewriter = csv.writer(outfile)
+
+            #Header row will be written if 1 is passed to the headerout input variable
+            if headerout == 1:
+                outfilewriter.writerow(['Pt', 'Hemisphere', 'Zone', 'Easting', 'Northing', 'Point Scale Factor', 'Grid Convergence'])
+
+            # Selects converstion to DD if required
+            for row in csvreader:
+                pt_num = row[0]
+                if geotypein.get() == 'DD':
+                    lat = (float(row[1]))
+                    long = (float(row[2]))
+                elif geotypein.get() == 'DMS':
+                    lat = dms2dd(float(row[1]))
+                    long = dms2dd(float(row[2]))
+                elif geotypein.get() == 'HP':
+                    lat = hp2dec(float(row[1]))
+                    long = hp2dec(float(row[2]))
+
+                # Calculate Conversion
+                hemisphere, zone, east, north, psf, grid_conv = geo2grid(lat, long)
+                grid_conv = dms2dd(grid_conv)
+                output = [pt_num] + [hemisphere, zone, east, north, psf, grid_conv]
+                outfilewriter.writerow(output)
     # Close Files
     outfile.close()
     csvfile.close()

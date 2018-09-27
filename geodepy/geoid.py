@@ -7,11 +7,6 @@ Geoid Module
 In Development
 """
 
-import numpy as np
-from scipy import interpolate
-from geodepy.convert import dms2dd
-
-
 # Define test grid points
 nvals = np.array([(dms2dd(-31.51), dms2dd(133.48), -8.806),
                   (dms2dd(-31.51), dms2dd(133.49), -8.743),
