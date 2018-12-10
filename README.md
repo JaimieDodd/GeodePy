@@ -16,6 +16,18 @@ NumPy
 
 Run: `python -m unittest discover geodepy/tests/`
 
+## API
+
+```
+cd api/
+virtualenv env
+source env/bin/activate
+pip install -r requirements.txt
+zappa deploy dev
+```
+
+For subsequent updating run: `zappa update dev`
+
 ### Authors
 
 * **Craig Harrison** - *Project Management* - [harry093](https://github.com/harry093)
