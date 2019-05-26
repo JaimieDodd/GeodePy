@@ -11,10 +11,16 @@ Ref2: http://www.mygeodesy.id.au/documents/Karney-Krueger%20equations.pdf
 
 import os
 import csv
-from math import sqrt, log, degrees, radians, sin, cos, tan, sinh, cosh, atan, atan2, modf
+import datetime
+from math import sqrt, log, degrees, radians, sin, cos, tan, sinh, cosh, atan, atan2
 import numpy as np
+<<<<<<< HEAD
 from geodepy.constants import grs80, utm, Transformation
 from geodepy.convert import dd2dms, dms2dd, hp2dec, dec2hp
+=======
+from geodepy.constants import grs80, utm, Transformation, atrf_gda2020
+from geodepy.convert import dec2hp, hp2dec
+>>>>>>> b3d43ccfaf2e10ad9610f4687e09ba7378aa20b1
 
 
 # Universal Transverse Mercator Projection Parameters
@@ -473,7 +479,7 @@ def conform7(x, y, z, trans):
     :param x: Cartesian X (m)
     :param y: Cartesian Y (m)
     :param z: Cartesian Z (m)
-    :param trans: Transformation Object
+    :param trans: Transformation Object (note: this function ignores all time-dependent variables)
     :return: Transformed X, Y, Z Cartesian Co-ordinates
     """
     if type(trans) != Transformation:
@@ -484,9 +490,9 @@ def conform7(x, y, z, trans):
                            [z]])
     # Convert Units for Transformation Parameters
     scale = trans.sc / 1000000
-    rx = radians(dms2dd(trans.rx / 10000))
-    ry = radians(dms2dd(trans.ry / 10000))
-    rz = radians(dms2dd(trans.rz / 10000))
+    rx = radians(hp2dec(trans.rx / 10000))
+    ry = radians(hp2dec(trans.ry / 10000))
+    rz = radians(hp2dec(trans.rz / 10000))
     # Create Translation Vector
     translation = np.array([[trans.tx],
                             [trans.ty],
@@ -512,22 +518,46 @@ def conform14(x, y, z, to_epoch, trans):
     :param x: Cartesian X (m)
     :param y: Cartesian Y (m)
     :param z: Cartesian Z (m)
-    :param to_epoch: Epoch co-ordinate transformation is performed at in YYYY.DOY notation
+    :param to_epoch: Epoch co-ordinate transformation is performed at (datetime.date Object)
     :param trans: Transformation Object
     :return: Cartesian X, Y, Z co-ordinates transformed using Transformation parameters at desired epoch
     """
     if type(trans) != Transformation:
         raise ValueError('trans must be a Transformation Object')
-    # Convert YYYY.DOY to Decimal Year
-    to_doy, to_year = modf(to_epoch)
-    ref_doy, ref_year = modf(trans.ref_epoch)
-    to_epoch = to_year + ((to_doy - 0.0005) / 0.36525)
-    ref_epoch = ref_year + (ref_doy / 0.36525)
-    # Perform Conformal 7 Parameter Transformation
-    # debug - output Transformation Object
-    timetrans = (trans + (to_epoch - ref_epoch))
+    if type(to_epoch) != datetime.date:
+        raise ValueError('to_epoch must be a datetime.date Object')
+    # Calculate 7 Parameters from 14 Parameter Transformation Object
+    timetrans = trans + to_epoch
+    # Perform Transformation
     xtrans, ytrans, ztrans = conform7(x, y, z, timetrans)
-    return xtrans, ytrans, ztrans  # , timetrans
+    return xtrans, ytrans, ztrans
+
+
+def atrftogda2020(x, y, z, epoch_from):
+    """
+    Transforms Cartesian (x, y, z) Coordinates in terms of the Australian Terrestrial Reference Frame (ATRF) at
+    a specified epoch to coordinates in terms of Geocentric Datum of Australia 2020 (GDA2020 - reference epoch 2020.0)
+    :param x: ATRF Cartesian X Coordinate (m)
+    :param y: ATRF Cartesian Y Coordinate (m)
+    :param z: ATRF Cartesian Z Coordinate (m)
+    :param epoch_from: ATRF Coordinate Epoch (datetime.date Object)
+    :return: Cartesian X, Y, Z Coordinates in terms of GDA2020
+    """
+    return conform14(x, y, z, epoch_from, atrf_gda2020)
+
+
+def gda2020toatrf(x, y, z, epoch_to):
+    """
+    Transforms Cartesian (x, y, z) Coordinates in terms of Geocentric Datum of Australia 2020
+    (GDA2020 - reference epoch 2020.0) to coordinates in terms of the Australian Terrestrial Reference Frame (ATRF) at
+    a specified epoch
+    :param x: GDA2020 Cartesian X Coordinate (m)
+    :param y: GDA2020 Cartesian Y Coordinate (m)
+    :param z: GDA2020 Cartesian Z Coordinate (m)
+    :param epoch_to: ATRF Coordinate Epoch (datetime.date Object)
+    :return: Cartesian X, Y, Z Coordinate in terms of ATRF at the specified Epoch
+    """
+    return conform14(x, y, z, epoch_to, -atrf_gda2020)
 
 
 def grid2geoio(fn, fn_out, headerout, geotypeout):
@@ -562,6 +592,7 @@ def grid2geoio(fn, fn_out, headerout, geotypeout):
     #fn_part = (os.path.splitext(fn))
     #fn_out = fn_part[0] + '_out' + fn_part[1]
     # Write Output
+<<<<<<< HEAD
     with open(fn_out, 'w', newline='') as outfile:
         outfilewriter = csv.writer(outfile)
 
@@ -591,6 +622,23 @@ def grid2geoio(fn, fn_out, headerout, geotypeout):
             grid_conv = dd2dms(grid_conv)
             output = [pt_num, lat, long, psf, grid_conv]
             outfilewriter.writerow(output)
+=======
+    outfilewriter = csv.writer(outfile)
+    # Optional Header Row
+    # outfilewriter.writerow(['Pt', 'Latitude', 'Longitude', 'Point Scale Factor', 'Grid Convergence'])
+    for row in csvreader:
+        pt_num = row[0]
+        zone = float(row[1])
+        east = float(row[2])
+        north = float(row[3])
+        # Calculate Conversion
+        lat, long, psf, grid_conv = grid2geo(zone, east, north)
+        lat = dec2hp(lat)
+        long = dec2hp(long)
+        grid_conv = dec2hp(grid_conv)
+        output = [pt_num, lat, long, psf, grid_conv]
+        outfilewriter.writerow(output)
+>>>>>>> b3d43ccfaf2e10ad9610f4687e09ba7378aa20b1
     # Close Files
     outfile.close()
     csvfile.close()
@@ -615,6 +663,7 @@ def geo2gridio(fn, fn_out, headerout, geotypein):
     coordinate with UTM Zone, Easting (m), Northing (m). This data is written
     to a new file with the name <inputfile>_out.csv
     """
+<<<<<<< HEAD
     # Open Filename (fn) and use the csv sniffer to detect a header. If header is found it is skipped
     with open(fn, newline='') as csvfile:
         sniffer = csv.Sniffer()
@@ -650,6 +699,31 @@ def geo2gridio(fn, fn_out, headerout, geotypein):
                 grid_conv = dms2dd(grid_conv)
                 output = [pt_num] + [hemisphere, zone, east, north, psf, grid_conv]
                 outfilewriter.writerow(output)
+=======
+    # Enter Filename
+    print('Enter co-ordinate file:')
+    fn = input()
+    # Open Filename
+    csvfile = open(fn)
+    csvreader = csv.reader(csvfile)
+    # Create Output File
+    fn_part = (os.path.splitext(fn))
+    fn_out = fn_part[0] + '_out' + fn_part[1]
+    outfile = open(fn_out, 'w')
+    # Write Output
+    outfilewriter = csv.writer(outfile)
+    # Optional Header Row
+    # outfilewriter.writerow(['Pt', 'Zone', 'Easting', 'Northing', 'Point Scale Factor', 'Grid Convergence'])
+    for row in csvreader:
+        pt_num = row[0]
+        lat = hp2dec(float(row[1]))
+        long = hp2dec(float(row[2]))
+        # Calculate Conversion
+        hemisphere, zone, east, north, psf, grid_conv = geo2grid(lat, long)
+        grid_conv = hp2dec(grid_conv)
+        output = [pt_num] + [hemisphere, zone, east, north, psf, grid_conv]
+        outfilewriter.writerow(output)
+>>>>>>> b3d43ccfaf2e10ad9610f4687e09ba7378aa20b1
     # Close Files
     outfile.close()
     csvfile.close()
